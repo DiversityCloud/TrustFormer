@@ -1,0 +1,66 @@
+import os
+import torch
+import time
+
+# 设置训练集比例列表
+train_ratios = [0.9]
+
+#max_source_num, max_target_num, max_user_num = 6001, 6006, 6006  #OTC
+max_source_num, max_target_num, max_user_num = 7605, 7605, 7605  #Alpha
+fea_dim = 1
+
+epochs = 80
+batch_size = 64
+alpha = 0.5
+lr = 0.00003
+dropout = 0.12
+drop_atten = 0.
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+loss_fn = nn.CrossEntropyLoss()
+big_model = bigMoel(max_user_num, fea_dim, dropout=dropout, drop_atten=drop_atten).to(device)
+optimizer = torch.optim.AdamW(big_model.parameters(), lr=lr)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+
+for train_ratio in train_ratios:
+    # 创建保存结果的文件夹
+    result_dir = f"AlphaTrainRatio_{int(train_ratio * 100)}"
+    os.makedirs(result_dir, exist_ok=True)
+
+    # 获取对应训练集比例的数据加载器
+    train_dl, test_dl = get_loader(train_ratio=train_ratio, batch_size=batch_size)
+
+    train_loss_list = []
+    train_acc_list = []
+    test_loss_list = []
+    test_acc_list = []
+    for t in range(epochs):
+        print(f"Epoch {t + 1}\n-------------------------------")
+        start_time = time.time()
+        # train
+        train(train_dl, big_model, loss_fn, optimizer, device, alpha)
+
+        # test
+        train_loss, train_correct = test(train_dl, big_model, loss_fn, device, alpha, name='train')
+        test_loss, test_correct = test(test_dl, big_model, loss_fn, device, alpha, name='test')
+
+        train_loss_list.append(train_loss)
+        train_acc_list.append(train_correct)
+        test_loss_list.append(test_loss)
+        test_acc_list.append(test_correct)
+
+        # 保存 epoch、loss 和 Accuracy 数据到文件
+        result_filename = os.path.join(result_dir, f"epoch_{t+1}_data.txt")
+        with open(result_filename, "w") as file:
+            file.write(f"Epoch: {t+1}\n")
+            file.write(f"Train Loss: {train_loss}\n")
+            file.write(f"Train Accuracy: {train_correct}\n")
+            file.write(f"Test Loss: {test_loss}\n")
+            file.write(f"Test Accuracy: {test_correct}\n")
+
+        scheduler.step()
+        print(f'run time: {time.time()-start_time:.3f}s')
+
+    print(f"Training with train_ratio={train_ratio} completed.")
+
+print("Done!")
