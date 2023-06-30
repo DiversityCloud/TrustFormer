@@ -1,0 +1,52 @@
+def get_loader(train_ratio=0.8, batch_size=50):
+    # train ratio
+    train_num = int(final_df.shape[0] * train_ratio)
+
+    train_seq_data = np.stack(final_df['seq_data'].values)[:train_num]
+    test_seq_data = np.stack(final_df['seq_data'].values)[train_num:]
+
+    x_train = X[:train_num]
+    source_id_train = source_id_array[:train_num]
+    target_id_train = target_id_array[:train_num]
+    y_train = label_list[:train_num]
+
+    x_test = X[train_num:]
+    source_id_test = source_id_array[train_num:]
+    target_id_test = target_id_array[train_num:]
+    y_test = label_list[train_num:]
+
+    class CustomDataset(Dataset):
+        def __init__(self, x, source_id, target_id, seq_data, y):
+            self.x = x
+            self.source_id = source_id
+            self.target_id = target_id
+            self.seq_data = seq_data
+            self.y = y
+
+        def __len__(self):
+            return len(self.y)
+
+        def __getitem__(self, idx):
+            sample = {
+                'x': torch.tensor(self.x[idx]).float(),
+                'source_id': torch.tensor(self.source_id[idx]).unsqueeze(0),
+                'target_id': torch.tensor(self.target_id[idx]).unsqueeze(0),
+                'seq_data': torch.tensor(self.seq_data[idx]),
+                'y': torch.tensor(self.y[idx])
+            }
+            return sample
+
+    # create train and test datasets
+    train_dataset = CustomDataset(x_train, source_id_train, target_id_train,
+                                  train_seq_data, y_train)
+    test_dataset = CustomDataset(x_test, source_id_test, target_id_test,
+                                 test_seq_data, y_test)
+
+    # create train and test dataloaders
+    train_dl = DataLoader(train_dataset,
+                          batch_size=batch_size,
+                          shuffle=True,
+                          drop_last=True)
+    test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    return train_dl, test_dl
